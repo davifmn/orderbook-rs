@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: fmt, clippy (pedantic), tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - name: tests (conformance with Go, property tests, rules, zero allocations), in release
+        run: cargo test --release
+      - name: doc tests and docs build without warnings
+        run: cargo test --doc && RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+
+  msrv:
+    name: library builds on the declared minimum Rust (1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.85
+      - run: cargo check --lib
+
+  fuzz:
+    name: fuzz against the reference model (cargo-fuzz, 2 minutes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-fuzz --locked
+      - run: cargo fuzz run against_reference -- -max_total_time=120 -max_len=4096
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts
+
+  bench:
+    name: benchmarks (criterion)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: run
+        run: cargo bench --bench book -- --warm-up-time 2 --measurement-time 10 | tee bench.txt
+      - name: summary
+        run: |
+          {
+            echo '### Benchmarks'
+            echo '```'
+            grep -m1 'model name' /proc/cpuinfo || true
+            echo "vCPUs: $(nproc)"
+            grep -E '^[a-z]|time:' bench.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bench
+          path: |
+            bench.txt
+            target/criterion
+
+  audit:
+    name: cargo audit (dev dependencies; the library has none)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-audit --locked
+      - run: cargo audit

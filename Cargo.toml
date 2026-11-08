@@ -1,0 +1,37 @@
+[package]
+name = "orderbook"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.85"
+description = "A limit order book with price-time priority: a Rust port of matching-engine's book, checked against the Go implementation"
+license = "MIT"
+repository = "https://github.com/davifmn/orderbook-rs"
+readme = "README.md"
+keywords = ["order-book", "matching-engine", "trading", "exchange"]
+categories = ["data-structures", "finance"]
+
+[dependencies]
+# none: the book is plain data structures
+
+[dev-dependencies]
+proptest = "1.12"
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "book"
+harness = false
+
+[profile.bench]
+debug = true
+
+[lints.rust]
+missing_docs = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_possible_wrap = "allow"
+must_use_candidate = "allow"
+doc_markdown = "allow"
