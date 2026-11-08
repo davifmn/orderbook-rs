@@ -52,6 +52,28 @@ benchmarks are built identically; the realistic one replays the recorded flow.
 cargo bench --bench book
 ```
 
+Medians from CI on a GitHub-hosted `ubuntu-latest` runner. The Go column is from
+matching-engine's own CI run (`docs/benchmarks.md`, same runner type, different day).
+Shared runners are noisy, so read the ratios as orders of magnitude.
+
+| Benchmark | Rust (this crate) | Go (matching-engine) |
+|---|---|---|
+| Add and cancel in a 1,000-level book | **94 ns** | 119 ns |
+| Take the top of the book (IOC trade) | **20 ns** | 49 ns |
+| Rest 40 orders on 10 levels, then sweep them | **2.2 µs** | 5.0 µs |
+| Realistic flow, per command | **68 ns** (the recorded 50k flow, with STP/post-only/FOK) | 136 ns (its own 500k recording, a simpler mix) |
+| Allocations in steady state | 0 | 0 |
+
+Where the difference comes from:
+- **No garbage collector and no write barriers.** Updating links between nodes is a
+  plain store.
+- **Smaller, contiguous nodes.** `u32` links in one arena, instead of 8-byte pointers to
+  separately allocated objects.
+- **A cheaper id hash.** One multiply, instead of the Go map's general-purpose hash.
+
+The fuzzer runs about 5,600 command sequences per second. The last CI run executed
+671,867 sequences in 2 minutes without a single difference from the reference model.
+
 ## API
 
 | | |
